@@ -3,6 +3,7 @@
 #include <utility>
 
 #include "leach-routing-table.h"
+#include "ns3/event-id.h"
 #include "ns3/ipv4-address.h"
 #include "ns3/ipv4-interface-address.h"
 #include "ns3/ipv4-route.h"
@@ -184,6 +185,92 @@ RoutingTable::Print(Ptr<OutputStreamWrapper> stream) const
     *stream->GetStream() << "\n";
 }
 
+bool
+RoutingTable::AddIpv4Event(Ipv4Address address, EventId id)
+{
+    std::pair<std::map<Ipv4Address, EventId>::iterator, bool> result = m_ipv4Events.insert(std::make_pair(address, id));
+    return result.second;
+}
+
+bool
+RoutingTable::AnyRunningEvent(Ipv4Address address)
+{
+    EventId event;
+    std::map<Ipv4Address, EventId>::const_iterator i = m_ipv4Events.find(address);
+    if (m_ipv4Events.empty())
+    {
+        return false;
+    }
+    if (i == m_ipv4Events.end())
+    {
+        return true;
+    }
+    event = i->second;
+    if (event.IsRunning())
+    {
+        return true;
+    }
+    else 
+    {
+        return false;
+    }
+}
+
+bool
+RoutingTable::ForceDeleteIpv4Event(Ipv4Address address)
+{
+    EventId event;
+    std::map<Ipv4Address, EventId>::const_iterator i = m_ipv4Events.find(address);
+    if (m_ipv4Events.empty() || i == m_ipv4Events.end())
+    {
+        return false;
+    }
+    event = i->second;
+    Simulator::Cancel(event);
+    m_ipv4Events.erase(address);
+    return true;
+}
+
+bool
+RoutingTable::DeleteIpv4Event(Ipv4Address address)
+{
+    EventId event;
+    std::map<Ipv4Address, EventId>::const_iterator i = m_ipv4Events.find(address);
+    if (m_ipv4Events.empty() || i == m_ipv4Events.end())
+    {
+        return false;
+    }
+    event = i->second;
+    if (event.IsRunning())
+    {
+        return false;
+    }
+    if (event.IsExpired())
+    {
+        event.Cancel();
+        m_ipv4Events.erase(address);
+        return true;
+    }
+    else 
+    {
+        m_ipv4Events.erase(address);
+        return true;
+    }
+}
+
+EventId
+RoutingTable::GetEventId(Ipv4Address address)
+{
+    std::map<Ipv4Address, EventId>::const_iterator i = m_ipv4Events.find(address);
+    if (m_ipv4Events.empty() || i == m_ipv4Events.end())
+    {
+        return EventId();
+    }
+    else
+    {
+        return i->second;
+    }
+}
 
 } /* namespace leach */
-} /* namespace ns3 *
+} /* namespace ns3 */
