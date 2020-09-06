@@ -23,10 +23,10 @@ private:
   int nadhoc;
   int nodeSpeed;
   int nodePause;
-  int numPackets;
-  int interval;
+  // int numPackets;
+  // int interval;
   double totaltime;
-  uint32_t packetSize;
+  // uint32_t packetSize;
   double txpower;
   bool verbose;
   bool m_pcap;
@@ -48,17 +48,18 @@ private:
   
 
 confignode::confignode():
-  nadhoc (3),
-  nodeSpeed (20), //in m/s
+  nadhoc (50),
+  nodeSpeed (7), //in m/s
   nodePause (0), //in s
   totaltime (200.0),
   packetSize (512),
   verbose (false),
-  interval (1),
-  numPackets (1),
+  //interval (1),
+  tracemobility (false),
+  //numPackets (1),
   m_pcap (false),
   m_ascii (false),
-  txpower (27)
+  //txpower (27)
 {
 
 }
@@ -73,11 +74,12 @@ cmd.AddValue ("nadhoc", "Number adhocnodes", nadhoc);
 cmd.AddValue ("time",  "Simulation time (sec)", totaltime);
 cmd.AddValue ("pcap",   "Enable PCAP traces on interfaces", m_pcap);
 cmd.AddValue ("ascii",   "Enable Ascii traces on interfaces", m_ascii);
-cmd.AddValue ("packetSize", "size of application packet sent", packetSize);
-cmd.AddValue ("numPackets", "number of packets generated", numPackets);
-cmd.AddValue ("interval", "interval (seconds) between packets", interval);
+//cmd.AddValue ("packetSize", "size of application packet sent", packetSize);
+//cmd.AddValue ("numPackets", "number of packets generated", numPackets);
+//cmd.AddValue ("interval", "interval (seconds) between packets", interval);
 cmd.AddValue ("verbose", "turn on all WifiNetDevice log components", verbose);
-cmd.AddValue ("txPower", "Transmitted Power", txpower);
+//cmd.AddValue ("txPower", "Transmitted Power", txpower);
+cmd.AddValue ("traceMobility", "Enable mobility tracing", m_traceMobility);
 cmd.Parse(argc,argv)
 //check ascii and pcap
 //tx power not used numpacket packet sixe interval
@@ -120,15 +122,66 @@ WifiMacHelper wifiMac;
 
 wifiMac.SetType ("ns3::AdhocWifiMac");
 NetDeviceContainer adhocDevices = wifi.Install (wifiPhy, wifiMac, adhocNodes);
+MobilityHelper mobilityAdhoc;
+int64_t streamIndex = 0; // used to get consistent mobility across scenarios
+ 
+ObjectFactory pos;
+pos.SetTypeId ("ns3::RandomRectanglePositionAllocator");
+pos.Set ("X", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=300.0]"));
+pos.Set ("Y", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=1500.0]"));
+ 
+Ptr<PositionAllocator> taPositionAlloc = pos.Create ()->GetObject<PositionAllocator> ();
+streamIndex += taPositionAlloc->AssignStreams (streamIndex);
+ 
+std::stringstream ssSpeed;
+ssSpeed << "ns3::UniformRandomVariable[Min=0.0|Max=" << nodeSpeed << "]";
+std::stringstream ssPause;
+ssPause << "ns3::ConstantRandomVariable[Constant=" << nodePause << "]";
+mobilityAdhoc.SetMobilityModel ("ns3::RandomWaypointMobilityModel",
+                                "Speed", StringValue (ssSpeed.str ()),
+                                "Pause", StringValue (ssPause.str ()),
+                                "PositionAllocator", PointerValue (taPositionAlloc));
+mobilityAdhoc.SetPositionAllocator (taPositionAlloc);
+mobilityAdhoc.Install (adhocNodes);
+streamIndex += mobilityAdhoc.AssignStreams (adhocNodes, streamIndex);
+NS_UNUSED (streamIndex); // From this point, streamIndex is unused
+ 
 
-
-phy.SetChannel (channel.Create());
+//phy.SetChannel (channel.Create());
 if (m_pcap)
     wifiPhy.EnablePcapAll (std::string ("mp-"));
   if (m_ascii)
     {
+      //AsciiTraceHelper ascii;
+      //wifiPhy.EnableAsciiAll (ascii.CreateFileStream ("manet.tr"));
+      std::stringstream ss;
+      ss << nadhoc;
+      std::string nodes = ss.str ();
+ 
+      std::stringstream ss2;
+      ss2 << nodeSpeed;
+      std::string sNodeSpeed = ss2.str ();
+ 
+      std::stringstream ss3;
+      ss3 << nodePause;
+      std::string sNodePause = ss3.str ();
+ 
+      std::stringstream ss4;
+      ss4 << rate;
+      std::string sRate = ss4.str ();
+ 
+   //NS_LOG_INFO ("Configure Tracing.");
+   //tr_name = tr_name + "_" + m_protocolName +"_" + nodes + "nodes_" + sNodeSpeed + "speed_" + sNodePause + "pause_" + sRate + "rate";
+ 
+   //AsciiTraceHelper ascii;
+   //Ptr<OutputStreamWrapper> osw = ascii.CreateFileStream ( (tr_name + ".tr").c_str());
+   //wifiPhy.EnableAsciiAll (osw);
       AsciiTraceHelper ascii;
-      wifiPhy.EnableAsciiAll (ascii.CreateFileStream ("manet.tr"));
+      MobilityHelper::EnableAsciiAll (ascii.CreateFileStream (tr_name + ".mob"));
+ 
+   //Ptr<FlowMonitor> flowmon;
+   //FlowMonitorHelper flowmonHelper;
+   //flowmon = flowmonHelper.InstallAll ();
     }
 
 }
@@ -136,7 +189,7 @@ void
 confignode::InstallInternetStack ()
 {
   InternetStackHelper internetStack;
-  internetStack.Install (adhocnodes);
+  internetStack.Install (adhocNodes);
   Ipv4AddressHelper address;
   address.SetBase ("10.1.1.0", "255.255.255.0");
   interfaces = address.Assign (adhocDevices);
