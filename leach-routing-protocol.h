@@ -232,8 +232,75 @@ private:
     UnicastForwardCallback m_selfCallback;
     /// Error callback for own packet
     ErrorCallback m_errorCallback;
-    /// Provide uniform random variables
-    Ptr<UniformRandomVariable> m_uniformRandomVariable;
+
+private:
+    /// Start protocol
+    void
+    Start();
+    /// Queue Packet till route is found
+    void
+    EnqueuePacket (Ptr<Packet> p, const Ipv4Header &header);
+    /// Decide wether to send packet in buffer
+    bool
+    DataAggregation (Ptr<Packet> p);
+    bool
+    Proposal (Ptr<Packet> p);
+    bool
+    OptM (Ptr<Packet> p);
+    bool
+    ControlLimit (Ptr<Packet> p);
+    bool
+    SelectiveForwarding (Ptr<Packet> p);
+
+    /// De-Aggregate chunks of data
+    bool
+    DeAggregate (Ptr<Packet> in, Ptr<Packet> &out, LeachHeader&);
+
+    /// Find Socket with local interface address iface
+    Ptr<Socket>
+    FindSocketWithInterfaceAddress (Ipv4InterfaceAddress iface) const;
+    /// Find Socket with local address iface
+    Ptr<Socket>
+    FindSocketWithAddress (Ipv4InterfaceAddress iface) const;
+
+    ///Receive LeachControl packets
+    ///Receive and process leach control packets
+    void
+    RecvLeach (Ptr<Socket> socket);
+
+    void
+    Send (Ptr<Ipv4Route>, Ptr<const Packet>, const Ipv4Header&);
+    /// Create Loopback Route for given header
+    Ptr<Ipv4Route>
+    LoopbackRoute (const Ipv4Header &header, Ptr<NetDevice> oif) const;
+    /// Triggered by timer, sent 1s after cluster head is elected
+    void
+    SendBroadcast();
+    /// Select cluster head selection
+    void
+    PeriodicUpdate();
+    /// Cluster members tell cluster head 
+    void 
+    RespondToClusterHead ();
+#ifndef DA
+    /// Deal with no DA
+    void
+    EnqueueForNoDA (UnicastForwardCallback ucb, Ptr<Ipv4Route> route, Ptr<const Packet> p, const Ipv4Header &header);
+    void
+    AutoDequequeNoDa();
+    struct DeferredPack
+    {
+        UnicastForwardCallback ucb;
+        Ptr<Ipv4Route> route;
+        Ptr<const Packet> p;
+        Ipv4Header header;
+    };
+    std::vector<struct DeferredPack> DeferredQueue;
+#endif
+
+    /// Notify if packet is dropped
+    void 
+    Drop (Ptr<const Packet>, const Ipv4Header &, Socket::SocketErrno);
 
     /// Timer to trigger periodic updates 
     Timer m_periodicUpdateTimer;
@@ -241,6 +308,8 @@ private:
     Timer m_broadcastClusterHeadTimer;
     /// Timer to feed cluster head its members
     Timer m_respondToClusterHeadTimer;
+    /// Provide uniform random variables
+    Ptr<UniformRandomVariable> m_uniformRandomVariable;
 };
     
 
