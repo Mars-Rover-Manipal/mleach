@@ -1,6 +1,6 @@
 #ifndef LEACH_ROUTING_PROTOCOL_H
 #define LEACH_ROUTING_PROTOCOL_H
-
+ 
 #include <map>
 #include <vector>
 
@@ -246,7 +246,7 @@ private:
     bool
     Proposal (Ptr<Packet> p);
     bool
-    OptM (Ptr<Packet> p);
+    OptTM (Ptr<Packet> p);
     bool
     ControlLimit (Ptr<Packet> p);
     bool
@@ -261,7 +261,7 @@ private:
     FindSocketWithInterfaceAddress (Ipv4InterfaceAddress iface) const;
     /// Find Socket with local address iface
     Ptr<Socket>
-    FindSocketWithAddress (Ipv4InterfaceAddress iface) const;
+    FindSocketWithAddress (Ipv4Address iface) const;
 
     ///Receive LeachControl packets
     ///Receive and process leach control packets
@@ -287,7 +287,7 @@ private:
     void
     EnqueueForNoDA (UnicastForwardCallback ucb, Ptr<Ipv4Route> route, Ptr<const Packet> p, const Ipv4Header &header);
     void
-    AutoDequequeNoDa();
+    AutoDequeueNoDA();
     struct DeferredPack
     {
         UnicastForwardCallback ucb;
