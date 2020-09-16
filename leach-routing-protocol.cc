@@ -1,33 +1,13 @@
-#include <bits/stdint-intn.h>
-#include <bits/stdint-uintn.h>
-#include <cstddef>
 #include <iostream>
 #include <cmath>
-#include <ostream>
 #include <vector>
 
 #include "leach-routing-protocol.h"
 #include "ns3/assert.h"
-#include "ns3/callback.h"
 #include "ns3/ipv4-address.h"
-#include "ns3/ipv4-interface-address.h"
-#include "ns3/ipv4-route.h"
-#include "ns3/ipv4-routing-protocol.h"
-#include "ns3/log-macros-disabled.h"
 #include "ns3/log.h"
 #include "ns3/inet-socket-address.h"
-#include "ns3/node.h"
-#include "ns3/nstime.h"
-#include "ns3/object-base.h"
-#include "ns3/object.h"
-#include "ns3/packet.h"
-#include "ns3/ptr.h"
-#include "ns3/random-variable-stream.h"
-#include "ns3/simulator.h"
-#include "ns3/socket.h"
-#include "ns3/timer.h"
 #include "ns3/trace-source-accessor.h"
-#include "ns3/type-id.h"
 #include "ns3/udp-socket-factory.h"
 #include "ns3/wifi-net-device.h"
 #include "ns3/boolean.h"
@@ -35,10 +15,12 @@
 #include "ns3/uinteger.h"
 #include "ns3/vector.h"
 #include "ns3/udp-header.h"
-#include "scratch/leach-routing-table.h"
-#include "src/core/model/boolean.h"
-#include "src/core/model/vector.h"
 
+//#define DA
+//#define DA_PROP
+//#define DA_OPT
+//#define DA_CL
+//#define DA_SF
 
 namespace ns3 {
 
@@ -214,9 +196,9 @@ RoutingProtocol::Start ()
     {
         Round = 0;
         m_routingTable.SetHoldDownTime (Time (m_periodicUpdateInterval));
-        m_periodicUpdateTimer.SetFunction (&RoutingProtocol::PeriodicUpdate(), this);
-        m_broadcastClusterHeadTimer.SetFunction (&RoutingProtocol::SendBroadcast(), this);
-        m_respondToClusterHeadTimer.SetFunction (&RoutingProtocol::RespondToClusterHead(), this);
+        m_periodicUpdateTimer.SetFunction (&RoutingProtocol::PeriodicUpdate, this);
+        m_broadcastClusterHeadTimer.SetFunction (&RoutingProtocol::SendBroadcast, this);
+        m_respondToClusterHeadTimer.SetFunction (&RoutingProtocol::RespondToClusterHead, this);
         m_periodicUpdateTimer.Schedule (MicroSeconds (m_uniformRandomVariable->GetInteger(10,1000)));
     }
 }
@@ -243,6 +225,14 @@ RoutingProtocol::LoopbackRoute(const Ipv4Header &header, Ptr<NetDevice> oif) con
             }
         }
     }
+    else
+    {
+        route->SetSource(j->second.GetLocal());
+    }
+    NS_ASSERT_MSG(route->GetSource() != Ipv4Address(), "Valid Leach source address not found");
+    route->SetGateway(Ipv4Address("127.0.0.1"));
+    route->SetOutputDevice(m_lo);
+    return route;
 }
 
 bool
