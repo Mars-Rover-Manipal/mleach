@@ -1,9 +1,6 @@
 #include "LeachPacket.h"
 #include "ns3/address-utils.h"
-#include "ns3/assert.h"
-#include "ns3/object-base.h"
 #include "ns3/packet.h"
-#include <bits/stdint-uintn.h>
 
 namespace ns3 {
 namespace leach {

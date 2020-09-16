@@ -1,29 +1,16 @@
 #ifndef LEACH_ROUTING_PROTOCOL_H
 #define LEACH_ROUTING_PROTOCOL_H
  
-#include <map>
 #include <vector>
 
 #include "leach-routing-queue.h"
 #include "leach-routing-table.h"
 #include "LeachPacket.h"
-#include "ns3/boolean.h"
-#include "ns3/ipv4-header.h"
-#include "ns3/ipv4-interface-address.h"
-#include "ns3/ipv4-route.h"
-#include "ns3/ipv4.h"
-#include "ns3/net-device.h"
 #include "ns3/node.h"
-#include "ns3/nstime.h"
-#include "ns3/packet.h"
-#include "ns3/ptr.h"
 #include "ns3/random-variable-stream.h"
 #include "ns3/ipv4-routing-protocol.h"
 #include "ns3/ipv4-l3-protocol.h"
 #include "ns3/output-stream-wrapper.h"
-#include "ns3/socket.h"
-#include "ns3/timer.h"
-#include "ns3/type-id.h"
 #include "ns3/vector.h"
 #include "ns3/traced-value.h"
 
@@ -47,7 +34,7 @@ public:
     static TypeId GetTypeId(void);
     static const uint32_t LEACH_PORT;
 
-    // Contructor
+    // c-tor
     RoutingProtocol();
     virtual ~RoutingProtocol();
     virtual void DoDispose();
@@ -72,7 +59,7 @@ public:
      *
      * \returns a code that indicates what happened in the lookup
      */
-    virtual Ptr<Ipv4Route> RouteOutput (Ptr<Packet> p, const Ipv4Header &header, Ptr<NetDevice> oif, Socket::SocketErrno &sockerr);
+    Ptr<Ipv4Route> RouteOutput (Ptr<Packet> p, const Ipv4Header &header, Ptr<NetDevice> oif, Socket::SocketErrno &sockerr);
 
     /**
      * \brief Route an input packet (to be forwarded or locally delivered)
@@ -95,9 +82,9 @@ public:
      * \returns true if the Ipv4RoutingProtocol takes responsibility for 
      *          forwarding or delivering the packet, false otherwise
      */ 
-    virtual bool RouteInput  (Ptr<const Packet> p, const Ipv4Header &header, Ptr<const NetDevice> idev, 
+    bool RouteInput  (Ptr<const Packet> p, const Ipv4Header &header, Ptr<const NetDevice> idev, 
                               UnicastForwardCallback ucb, MulticastForwardCallback mcb,
-                              LocalDeliverCallback lcb, ErrorCallback ecb) = 0;
+                              LocalDeliverCallback lcb, ErrorCallback ecb);
 
     /**
      * \param interface the index of the interface we are being notified about
@@ -105,7 +92,7 @@ public:
      * Protocols are expected to implement this method to be notified of the state change of
      * an interface in a node.
      */
-    virtual void NotifyInterfaceUp (uint32_t interface) = 0;
+    virtual void NotifyInterfaceUp (uint32_t interface);
 
     /**
      * \param interface the index of the interface we are being notified about
@@ -113,7 +100,7 @@ public:
      * Protocols are expected to implement this method to be notified of the state change of
      * an interface in a node.
      */
-    virtual void NotifyInterfaceDown (uint32_t interface) = 0;
+    virtual void NotifyInterfaceDown (uint32_t interface);
   
     /**
      * \param interface the index of the interface we are being notified about
@@ -123,7 +110,7 @@ public:
      * a new address is added to an interface. Typically used to add a 'network route' on an
      * interface. Can be invoked on an up or down interface.
      */
-    virtual void NotifyAddAddress (uint32_t interface, Ipv4InterfaceAddress address) = 0;
+    virtual void NotifyAddAddress (uint32_t interface, Ipv4InterfaceAddress address);
   
     /**
      * \param interface the index of the interface we are being notified about
@@ -133,21 +120,21 @@ public:
      * a new address is removed from an interface. Typically used to remove the 'network route' of an
      * interface. Can be invoked on an up or down interface.
      */
-    virtual void NotifyRemoveAddress (uint32_t interface, Ipv4InterfaceAddress address) = 0;
+    virtual void NotifyRemoveAddress (uint32_t interface, Ipv4InterfaceAddress address);
   
     /**
      * \param ipv4 the ipv4 object this routing protocol is being associated with
      * 
      * Typically, invoked directly or indirectly from ns3::Ipv4::SetRoutingProtocol
      */
-    virtual void SetIpv4 (Ptr<Ipv4> ipv4) = 0;
+    virtual void SetIpv4 (Ptr<Ipv4> ipv4);
   
     /**
      * \brief Print the Routing Table entries
      *
      * \param stream The ostream the Routing table is printed to
      */
-    virtual void PrintRoutingTable (Ptr<OutputStreamWrapper> stream) const;
+    virtual void PrintRoutingTable (Ptr<OutputStreamWrapper> stream, Time::Unit unit = Time::S) const;
 
     // Methods to handle protocol parameters
     void SetPosition (Vector pos);
