@@ -1,4 +1,5 @@
 #include "ns3/core-module.h"
+#include "ns3/double.h"
 #include "ns3/network-module.h"
 #include "ns3/applications-module.h"
 #include "ns3/mobility-module.h"
@@ -6,6 +7,7 @@
 #include "ns3/internet-module.h"
 #include "leach-helper.h"
 #include "leach-routing-protocol.h"
+#include "ns3/uinteger.h"
 #include "wsn-helper.h"
 #include "ns3/wifi-module.h"
 #include "ns3/energy-module.h"
@@ -137,13 +139,12 @@ int main (int argc, char **argv)
     cmd.Parse (argc, argv);
 
     SeedManager::SetSeed (12345);
+    std::cout << "Seed Set\n";
 
-#if 0
-    Config::SetDefault ("ns3::WsnApplication::PacketSize", StringValue ("64"));
-    Config::SetDefault ("ns3::WsnApplication::DataRate", StringValue (rate));
+    //Config::SetDefault ("ns3::WsnApplication::PacketSize", UintegerValue(64));
+    //Config::SetDefault ("ns3::WsnApplication::DataRate", DataRateValue (rate));
     Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode", StringValue (phyMode));
     Config::SetDefault ("ns3::WifiRemoteStationManager::RtsCtsThreshold", StringValue ("2000"));
-#endif
 
     test = LeachProposal ();
     test.CaseRun (nWifis, nSinks, totalTime, rate, phyMode, periodicUpdateInterval, dataStart, lambda);
@@ -422,13 +423,16 @@ LeachProposal::SetupEnergyModel()
 void
 LeachProposal::InstallInternetStack (std::string tr_name)
 {
+    std::cout << "Installing Internet Stack for " << (unsigned) m_nWifis << " nodes.\n";
     LeachHelper leach;
-    leach.Set ("Lambda", DoubleValue (m_lambda));
-    leach.Set ("PeriodicUpdateInterval", TimeValue (Seconds (m_periodicUpdateInterval)));
+    //std::cout << m_lambda << std::endl;
+    //leach.Set ("Lambda", DoubleValue (m_lambda));
+    //leach.Set ("PeriodicUpdateInterval", TimeValue (Seconds (m_periodicUpdateInterval)));
+    //std::cout << "Here 1\n";
     InternetStackHelper stack;
+#if 0
     uint32_t count = 0;
     int j=0;
-
     for (NodeContainer::Iterator i = nodes.Begin (); i != nodes.End (); ++i, ++j)
     {
         leach.Set("Position", Vector3DValue(positions[count++]));
@@ -437,25 +441,30 @@ LeachProposal::InstallInternetStack (std::string tr_name)
         Ptr<leach::RoutingProtocol> leachTracer = DynamicCast<leach::RoutingProtocol> ((*i)->GetObject<Ipv4> ()->GetRoutingProtocol());
         leachTracer->TraceConnectWithoutContext ("DroppedCount", MakeCallback (&CountDroppedPkt));
     }
-    //stack.Install (nodes);        // should give change to leach protocol on the position property
+#endif
+    stack.Install (nodes);        // should give change to leach protocol on the position property
     Ipv4AddressHelper address;
     address.SetBase ("10.1.1.0", "255.255.255.0");
     interfaces = address.Assign (devices);
+    std::cout << "Finished installing Internet Stack for " << (unsigned) m_nWifis << " nodes.\n";
 }
 
 void
 LeachProposal::InstallApplications ()
 {
+    std::cout << "Installing Applications for " << (unsigned) m_nWifis << " nodes.\n";
     Ptr<Node> node = NodeList::GetNode (0);
     Ipv4Address nodeAddress = node->GetObject<Ipv4> ()->GetAddress (1, 0).GetLocal ();
     Ptr<Socket> sink = SetupPacketReceive (nodeAddress, node);
     
-    WsnHelper wsn1 ("ns3::UdpSocketFactory", Address (InetSocketAddress (interfaces.GetAddress (0), port)));
-    wsn1.SetAttribute ("PktGenRate", DoubleValue(m_lambda));
+    //TODO: use wsn-helper
+    //WsnHelper wsn1 ("ns3::UdpSocketFactory", Address (InetSocketAddress (interfaces.GetAddress (0), port)));
+    OnOffHelper wsn1 ("ns3::UdpSocketFactory", Address (InetSocketAddress (interfaces.GetAddress (0), port)));
+    //wsn1.SetAttribute ("PktGenRate", DoubleValue(m_lambda));
     // 0 for periodic, 1 for Poisson
-    wsn1.SetAttribute ("PktGenPattern", IntegerValue(0));
-    wsn1.SetAttribute ("PacketDeadlineLen", IntegerValue(3000000000));  // default
-    wsn1.SetAttribute ("PacketDeadlineMin", IntegerValue(5000000000));  // default
+    //wsn1.SetAttribute ("PktGenPattern", IntegerValue(0));
+    //wsn1.SetAttribute ("PacketDeadlineLen", IntegerValue(3000000000));  // default
+    //wsn1.SetAttribute ("PacketDeadlineMin", IntegerValue(5000000000));  // default
     
     for (uint32_t clientNode = 1; clientNode <= m_nWifis - 1; clientNode++ )
     {
@@ -465,8 +474,10 @@ LeachProposal::InstallApplications ()
 
         apps1.Start (Seconds (var->GetValue (m_dataStart, m_dataStart + 1)));
         apps1.Stop (Seconds (m_totalTime));
-        wsnapp->TraceConnectWithoutContext ("PktCount", MakeCallback (&TotalPackets));
+        //TODO: Fix next line
+        //wsnapp->TraceConnectWithoutContext ("PktCount", MakeCallback (&TotalPackets));
     }
+    std::cout << "Finished installing Applications for " << (unsigned) m_nWifis << " nodes.\n";
 }
 #endif
 
@@ -577,9 +588,9 @@ LeachHelper::Create (Ptr<Node> node) const
 }
 
 void
-LeachHelper::Set (std::string name, const AttributeValue &value)
+LeachHelper::Set (std::string name, const AttributeValue &v)
 {
-    m_agentFactory.Set (name, value);
+    m_agentFactory.Set (name, v);
 }
 
 /*leach-routing-protocol.cc*/
