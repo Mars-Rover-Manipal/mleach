@@ -121,7 +121,7 @@ int main (int argc, char **argv)
     LeachProposal test;
     uint32_t nWifis = 50;
     uint32_t nSinks = 1;
-    double totalTime = 50.0;
+    double totalTime = 60.0;
     std::string rate ("8kbps");
     std::string phyMode ("DsssRate11Mbps");
     uint32_t periodicUpdateInterval = 5;
@@ -129,13 +129,13 @@ int main (int argc, char **argv)
     double lambda = 1.0;
 
     CommandLine cmd;
-    cmd.AddValue ("nWifis", "Number of WiFi nodes[Default:50]", nWifis);
-    cmd.AddValue ("nSinks", "Number of WiFi sink nodes[Default:1]", nSinks);
-    cmd.AddValue ("totalTime", "Total Simulation time[Default:50]", totalTime);
-    cmd.AddValue ("phyMode", "Wifi Phy mode[Default:DsssRate11Mbps]", phyMode);
-    cmd.AddValue ("rate", "CBR traffic rate[Default:8kbps]", rate);
-    cmd.AddValue ("periodicUpdateInterval", "Periodic Interval Time[Default=5]", periodicUpdateInterval);
-    cmd.AddValue ("dataStart", "Time at which nodes start to transmit data[Default=0.0]", dataStart);
+    cmd.AddValue ("nWifis",                 "Number of WiFi nodes",     nWifis);
+    cmd.AddValue ("nSinks",                 "Number of Base Stations",  nSinks);
+    cmd.AddValue ("totalTime",              "Total Simulation time",    totalTime);
+    cmd.AddValue ("phyMode",                "Wifi Phy mode",            phyMode);
+    cmd.AddValue ("rate",                   "CBR traffic rate",         rate);
+    cmd.AddValue ("periodicUpdateInterval", "Periodic Interval Time",   periodicUpdateInterval);
+    cmd.AddValue ("dataStart",              "Time at which nodes start to transmit data", dataStart);
     cmd.Parse (argc, argv);
 
     SeedManager::SetSeed (12345);
@@ -246,7 +246,7 @@ LeachProposal::CaseRun (uint32_t nWifis, uint32_t nSinks, double totalTime, std:
     InstallInternetStack (tr_name);
     InstallApplications ();
 
-    std::cout << "\nStarting simulation for " << m_totalTime << " s ...\n";
+    std::cout << "\nStarting simulation for " << m_totalTime << " s ...\n\n";
 #if 0
     AnimationInterface anim ("leach-animation.xml"); // Mandatory
     anim.UpdateNodeDescription (nodes.Get (0), "sink"); // Optional
@@ -278,8 +278,11 @@ LeachProposal::CaseRun (uint32_t nWifis, uint32_t nSinks, double totalTime, std:
     p2file = fopen(file_name, "w");
 
     std::cout << "Total bytes received: " << bytesTotal << "\n";
-    std::cout << "Total packets received/decompressed/received yet expired+dropped/generated: " << packetsReceived << "/" << packetsDecompressed
-              << "/" << packetsReceivedYetExpired + packetsDropped << "/" << packetsGenerated << "\n";
+    std::cout << "Total packets received: " << packetsReceived << "\n"
+              << "Total packets decompressed: " << packetsDecompressed << "\n"
+              << "Total packets received yet expired+dropped: " << packetsReceivedYetExpired + packetsDropped << "\n"
+              << "Total packets generated:" << packetsGenerated << "\n";
+
     for (uint32_t i=0; i<m_nWifis; i++)
     {
         Ptr<BasicEnergySource> basicSourcePtr = DynamicCast<BasicEnergySource> (sources.Get (i));
@@ -293,23 +296,31 @@ LeachProposal::CaseRun (uint32_t nWifis, uint32_t nSinks, double totalTime, std:
         energyRx += ptr->GetRxTime().ToDouble(Time::MS) * ptr->GetTxCurrentA();
         //NS_LOG_UNCOND("Idle time: " << ptr->GetIdleTime() << ", Tx Time: " << ptr->GetTxTime() << ", Rx Time: " << ptr->GetRxTime());
     }
-    std::cout << "Avg Idle time(ms) / Avg Tx Time(ms) / Avg Rx Time(ms): " << avgIdle/m_nWifis << "/" << avgTx/m_nWifis << "/" << avgRx/m_nWifis << "\n";
-    std::cout << "Avg Tx energy(mJ) / Avg Rx energy(mJ): " << energyTx/m_nWifis << "/" << energyRx/m_nWifis << "\n";
 
+    std::cout << "Avg Idle time(ms):  " << avgIdle/m_nWifis << "\n"
+              << "Avg Tx Time(ms):  " <<   avgTx/m_nWifis   << "\n"
+              << "Avg Rx Time(ms): " <<    avgRx/m_nWifis   << "\n";
+
+    std::cout << "Avg Tx energy(mJ): " << energyTx/m_nWifis << "\n"
+              << "Avg Rx energy(mJ): " << energyRx/m_nWifis << "\n";
+
+    std::cout << "\nGenerating Trace File." << std::endl;
     Ptr<leach::RoutingProtocol> leachTracer = DynamicCast<leach::RoutingProtocol> ((nodes.Get(m_nWifis/2))->GetObject<Ipv4> ()->GetRoutingProtocol());
-    //m_timeline = leachTracer->getTimeline();
+#if 0
+    m_timeline = leachTracer->getTimeline();
     m_txtime = leachTracer->getTxTime();
 	
-    //sort(m_timeline->begin(), m_timeline->end(), cmp);
-    //for (std::vector<struct ns3::leach::msmt>::iterator it=m_timeline->begin(); it!=m_timeline->end(); ++it)
-    //{
-    //    fprintf(pfile, "%.6f, %.6f\n", it->begin.GetSeconds(), it->end.GetSeconds());
-    //}
-    //sort(tx_time->begin(), tx_time->end());
+    sort(m_timeline->begin(), m_timeline->end(), cmp);
+    for (std::vector<struct ns3::leach::msmt>::iterator it=m_timeline->begin(); it!=m_timeline->end(); ++it)
+    {
+        fprintf(pfile, "%.6f, %.6f\n", it->begin.GetSeconds(), it->end.GetSeconds());
+    }
+    sort(tx_time->begin(), tx_time->end());
     for (std::vector<Time>::iterator it=m_txtime->begin(); it!=m_txtime->end(); ++it)
     {
         fprintf(p2file, "%.6f\n", it->GetSeconds());
     }
+#endif
   
     fclose(pfile);
     fclose(p2file);
@@ -452,7 +463,7 @@ LeachProposal::InstallInternetStack (std::string tr_name)
 void
 LeachProposal::InstallApplications ()
 {
-    std::cout << "Installing Applications for " << (unsigned) m_nWifis << " nodes.\n";
+    std::cout << "Installing Applications for " << (unsigned) m_nWifis << " devices.\n";
     Ptr<Node> node = NodeList::GetNode (0);
     Ipv4Address nodeAddress = node->GetObject<Ipv4> ()->GetAddress (1, 0).GetLocal ();
     Ptr<Socket> sink = SetupPacketReceive (nodeAddress, node);
@@ -476,8 +487,9 @@ LeachProposal::InstallApplications ()
         apps1.Stop (Seconds (m_totalTime));
         //TODO: Fix next line
         //wsnapp->TraceConnectWithoutContext ("PktCount", MakeCallback (&TotalPackets));
+        //std::cout << "Installed Application on device " << clientNode << std::endl;
     }
-    std::cout << "Finished installing Applications for " << (unsigned) m_nWifis << " nodes.\n";
+    std::cout << "Finished installing Applications on " << (unsigned) m_nWifis << " devices.\n";
 }
 #endif
 
