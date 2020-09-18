@@ -265,6 +265,7 @@ void WsnApplication::SendPacket ()
     NS_LOG_FUNCTION (this);
 
     NS_ASSERT (m_sendEvent.IsExpired ());
+    //leach::LeachHeader hdr(BooleanValue(false), Vector(0.0,0.0,0.0), Vector(0.0,0.0,0.0), Ipv4Address("255.255.255.255"), Time(0));
     leach::LeachHeader hdr;
     Ptr<Packet> packet = Create<Packet> (m_pktSize - sizeof(hdr));
     Ptr<UniformRandomVariable> m_uniformRandomVariable = CreateObject<UniformRandomVariable> ();

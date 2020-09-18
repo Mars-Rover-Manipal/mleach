@@ -113,7 +113,7 @@ public:
     }
 
 private:
-    BooleanValue m_PIR;          ///< (True/False)
+    BooleanValue m_PIR;     ///< (True/False)
     Vector m_position;      ///< (X, Y, Z) Position
     Vector m_acceleration;  ///< (X, Y< Z) Acceleration
     Ipv4Address m_address;
