@@ -144,7 +144,10 @@ public:
     void SetPIR (BooleanValue pir);
     BooleanValue GetPIR () const;
 
-    std::vector<struct msmt>* getTimeline();
+    std::vector<struct msmt>* getTimeline()
+    {
+        return &timeline;
+    }
     std::vector<Time>* getTxTime();
 
     /**

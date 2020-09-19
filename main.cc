@@ -61,13 +61,13 @@ CountDroppedPkt (uint32_t oldValue, uint32_t newValue)
 {
     packetsDropped += (newValue - oldValue);
 }
-/*
+
 bool
 cmp (struct ns3::leach::msmt a, struct ns3::leach::msmt b)
 {
     return (a.begin < b.begin);
 }
-*/
+
 class LeachProposal
 {
 public:
@@ -79,7 +79,8 @@ public:
                   std::string phyMode,
                   uint32_t periodicUpdateInterval,
                   double dataStart,
-                  double lambda);
+                  double lambda,
+                  bool netAnim);
 
 private:
     uint32_t m_nWifis;
@@ -96,7 +97,7 @@ private:
     Vector positions[205];
     double m_lambda;
     //std::vector<struct ns3::leach::msmt>* m_timeline;
-    std::vector<Time>* m_txtime;
+    //std::vector<Time>* m_txtime;
 
     NodeContainer nodes;
     NetDeviceContainer devices;
@@ -121,12 +122,13 @@ int main (int argc, char **argv)
     LeachProposal test;
     uint32_t nWifis = 50;
     uint32_t nSinks = 1;
-    double totalTime = 60.0;
+    double totalTime = 1.0;
     std::string rate ("8kbps");
     std::string phyMode ("DsssRate11Mbps");
     uint32_t periodicUpdateInterval = 5;
     double dataStart = 0.0;
     double lambda = 1.0;
+    bool netAnim = false;
 
     CommandLine cmd;
     cmd.AddValue ("nWifis",                 "Number of WiFi nodes",     nWifis);
@@ -136,6 +138,7 @@ int main (int argc, char **argv)
     cmd.AddValue ("rate",                   "CBR traffic rate",         rate);
     cmd.AddValue ("periodicUpdateInterval", "Periodic Interval Time",   periodicUpdateInterval);
     cmd.AddValue ("dataStart",              "Time at which nodes start to transmit data", dataStart);
+    cmd.AddValue ("netAnim",                "GUI Animation Interface",  netAnim);
     cmd.Parse (argc, argv);
 
     SeedManager::SetSeed (12345);
@@ -147,7 +150,7 @@ int main (int argc, char **argv)
     Config::SetDefault ("ns3::WifiRemoteStationManager::RtsCtsThreshold", StringValue ("2000"));
 
     test = LeachProposal ();
-    test.CaseRun (nWifis, nSinks, totalTime, rate, phyMode, periodicUpdateInterval, dataStart, lambda);
+    test.CaseRun (nWifis, nSinks, totalTime, rate, phyMode, periodicUpdateInterval, dataStart, lambda, netAnim);
 
     return 0;
 }
@@ -218,7 +221,7 @@ LeachProposal::SetupPacketReceive (Ipv4Address addr, Ptr <Node> node)
 #if 1
 void
 LeachProposal::CaseRun (uint32_t nWifis, uint32_t nSinks, double totalTime, std::string rate,
-                           std::string phyMode, uint32_t periodicUpdateInterval, double dataStart, double lambda)
+                           std::string phyMode, uint32_t periodicUpdateInterval, double dataStart, double lambda, bool netAnim)
 {
     m_nWifis = nWifis;
     m_nSinks = nSinks;
@@ -247,23 +250,26 @@ LeachProposal::CaseRun (uint32_t nWifis, uint32_t nSinks, double totalTime, std:
     InstallApplications ();
 
     std::cout << "\nStarting simulation for " << m_totalTime << " s ...\n\n";
-#if 0
-    AnimationInterface anim ("leach-animation.xml"); // Mandatory
-    anim.UpdateNodeDescription (nodes.Get (0), "sink"); // Optional
-    anim.UpdateNodeColor (nodes.Get (0), 0, 0, 255); // Optional
-    anim.UpdateNodeSize ( 0, 5.0, 5.0); // Optional
-    for (uint32_t i = 1; i < m_nWifis; ++i)
-    {
-        anim.UpdateNodeDescription (nodes.Get (i), "node"); // Optional
-        anim.UpdateNodeColor (nodes.Get (i), 255, 0, 0); // Optional
-        anim.UpdateNodeSize ( i, 3.0, 3.0); // Optional
-    }
+    //if (netAnim)
+    //{
+        std::cout << "Generating xml file for NetAnim." << std::endl;
+        AnimationInterface anim ("anim/leach-animation.xml"); // Mandatory
+        anim.UpdateNodeDescription (nodes.Get (0), "sink"); // Optional
+        anim.UpdateNodeColor (nodes.Get (0), 0, 0, 255); // Optional
+        anim.UpdateNodeSize ( 0, 5.0, 5.0); // Optional
+        for (uint32_t i = 1; i < m_nWifis; ++i)
+        {
+            anim.UpdateNodeDescription (nodes.Get (i), "node"); // Optional
+            anim.UpdateNodeColor (nodes.Get (i), 255, 0, 0); // Optional
+            anim.UpdateNodeSize ( i, 3.0, 3.0); // Optional
+        }
 
-    anim.EnablePacketMetadata (); // Optional
-    anim.EnableIpv4RouteTracking ("routingtable-leach.xml", Seconds (0), Seconds (5), Seconds (0.25)); //Optional
-    anim.EnableWifiMacCounters (Seconds (0), Seconds (50)); //Optional
-    anim.EnableWifiPhyCounters (Seconds (0), Seconds (50)); //Optional
-#endif
+        anim.EnablePacketMetadata (); // Optional
+        anim.EnableIpv4RouteTracking ("anim/routingtable-leach.xml", Seconds (0), Seconds (5), Seconds (0.25)); //Optional
+        anim.EnableWifiMacCounters (Seconds (0), Seconds (50)); //Optional
+        anim.EnableWifiPhyCounters (Seconds (0), Seconds (50)); //Optional
+        //std::cout << "Finished generating xml file for NetAnim.\n" << std::endl;
+    //}
     Simulator::Stop (Seconds (m_totalTime));
     Simulator::Run ();
 
@@ -296,6 +302,7 @@ LeachProposal::CaseRun (uint32_t nWifis, uint32_t nSinks, double totalTime, std:
         energyRx += ptr->GetRxTime().ToDouble(Time::MS) * ptr->GetTxCurrentA();
         //NS_LOG_UNCOND("Idle time: " << ptr->GetIdleTime() << ", Tx Time: " << ptr->GetTxTime() << ", Rx Time: " << ptr->GetRxTime());
     }
+    //std::cout << avgIdle << std::endl;
 
     std::cout << "Avg Idle time(ms):  " << avgIdle/m_nWifis << "\n"
               << "Avg Tx Time(ms):  " <<   avgTx/m_nWifis   << "\n"
@@ -310,16 +317,17 @@ LeachProposal::CaseRun (uint32_t nWifis, uint32_t nSinks, double totalTime, std:
     m_timeline = leachTracer->getTimeline();
     m_txtime = leachTracer->getTxTime();
 	
-    sort(m_timeline->begin(), m_timeline->end(), cmp);
+    //sort(m_timeline->begin(), m_timeline->end(), cmp);
     for (std::vector<struct ns3::leach::msmt>::iterator it=m_timeline->begin(); it!=m_timeline->end(); ++it)
     {
         fprintf(pfile, "%.6f, %.6f\n", it->begin.GetSeconds(), it->end.GetSeconds());
     }
-    sort(tx_time->begin(), tx_time->end());
+    //sort(tx_time->begin(), tx_time->end());
     for (std::vector<Time>::iterator it=m_txtime->begin(); it!=m_txtime->end(); ++it)
     {
         fprintf(p2file, "%.6f\n", it->GetSeconds());
     }
+    std::cout << "Here" << std::endl;
 #endif
   
     fclose(pfile);
@@ -367,7 +375,9 @@ LeachProposal::SetupMobility ()
     MobilityHelper mobility;
     ObjectFactory pos;
     uint32_t count = 0;
-
+    uint64_t streamIndex = 0; // for consistent mobility across scenarios
+    int nodeSpeed = 5;
+    int nodePause = 0;
 
     pos.SetTypeId ("ns3::RandomRectanglePositionAllocator");
     /*
@@ -385,8 +395,23 @@ LeachProposal::SetupMobility ()
     pos.Set ("Y", DoubleValue (225.0));
 
     Ptr <PositionAllocator> taPositionAlloc = pos.Create ()->GetObject <PositionAllocator> ();
-    mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+    //mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
+    //mobility.SetPositionAllocator (taPositionAlloc);
+
+    streamIndex += taPositionAlloc->AssignStreams (streamIndex);
+     
+    std::stringstream ssSpeed;
+    ssSpeed << "ns3::UniformRandomVariable[Min=0.0|Max=" << nodeSpeed << "]";
+    std::stringstream ssPause;
+    ssPause << "ns3::ConstantRandomVariable[Constant=" << nodePause << "]";
+    mobility.SetMobilityModel ("ns3::RandomWaypointMobilityModel",
+                                    "Speed", StringValue (ssSpeed.str ()),
+                                    "Pause", StringValue (ssPause.str ()),
+                                    "PositionAllocator", PointerValue (taPositionAlloc));
     mobility.SetPositionAllocator (taPositionAlloc);
+    streamIndex += mobility.AssignStreams (nodes, streamIndex);
+    NS_UNUSED (streamIndex); // From this point, streamIndex is unused
+
     mobility.Install (nodes);
   
     for (NodeContainer::Iterator i = nodes.Begin (); i != nodes.End (); ++i)
@@ -684,13 +709,13 @@ leach::RoutingProtocol::GetPIR() const
     return m_PIR;
 }
 
-/*
+#if 0
 std::vector<struct msmt>*
 leach::RoutingProtocol::getTimeline()
 {
     return &timeline;
 }
-*/
+#endif
 
 std::vector<Time>*
 leach::RoutingProtocol::getTxTime()
