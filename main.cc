@@ -1,5 +1,6 @@
 #include "ns3/core-module.h"
 #include "ns3/double.h"
+#include "ns3/flow-monitor.h"
 #include "ns3/network-module.h"
 #include "ns3/applications-module.h"
 #include "ns3/mobility-module.h"
@@ -15,6 +16,7 @@
 #include "LeachPacket.h"
 #include "ns3/udp-header.h"
 #include "ns3/netanim-module.h"
+#include "ns3/flow-monitor-helper.h"
 
 #include <cstdio>
 #include <iostream>
@@ -132,8 +134,8 @@ int main (int argc, char **argv)
     uint32_t periodicUpdateInterval = 5;
     double dataStart = 0.0;
     double lambda = 1.0;
-    bool verbose = false;
-    bool tracing = false;
+    bool verbose = true;
+    bool tracing = true;
     bool netAnim = false;
 
     CommandLine cmd;
@@ -262,30 +264,37 @@ LeachProposal::CaseRun (uint32_t nWifis, uint32_t nSinks, double totalTime, std:
     InstallApplications ();
 
     std::cout << "\nStarting simulation for " << m_totalTime << " s ...\n\n";
-    if (m_netAnim)
+    //if (m_netAnim)
+    //{
+    std::cout << "Generating xml file for NetAnim..." << std::endl;
+    AnimationInterface anim ("anim/leach-animation.xml"); // Mandatory
+    anim.UpdateNodeDescription (nodes.Get (0), "sink"); // Optional
+    anim.UpdateNodeColor (nodes.Get (0), 0, 0, 255); // Optional
+    anim.UpdateNodeSize ( 0, 20.0, 20.0); // Optional
+    //anim.GetNodeEnergyFraction(nodes.Get(0)); // Optional
+    for (uint32_t i = 1; i < m_nWifis; ++i)
     {
-        std::cout << "Generating xml file for NetAnim..." << std::endl;
-        AnimationInterface anim ("anim/leach-animation.xml"); // Mandatory
-        anim.UpdateNodeDescription (nodes.Get (0), "sink"); // Optional
-        anim.UpdateNodeColor (nodes.Get (0), 0, 0, 255); // Optional
-        anim.UpdateNodeSize ( 0, 10.0, 10.0); // Optional
-        //anim.GetNodeEnergyFraction(nodes.Get(0)); // Optional
-        for (uint32_t i = 1; i < m_nWifis; ++i)
-        {
-            anim.UpdateNodeDescription (nodes.Get (i), "node"); // Optional
-            anim.UpdateNodeColor (nodes.Get (i), 255, 0, 0); // Optional
-            anim.UpdateNodeSize ( i, 5.0, 5.0); // Optional
-            //anim.GetNodeEnergyFraction (nodes.Get(i)); // Optional
-        }
-
-        anim.EnablePacketMetadata (); // Optional
-        anim.EnableIpv4RouteTracking ("anim/routingtable-leach.xml", Seconds (0), Seconds (5), Seconds (0.25)); //Optional
-        anim.EnableWifiMacCounters (Seconds (0), Seconds (50)); //Optional
-        anim.EnableWifiPhyCounters (Seconds (0), Seconds (50)); //Optional
-        //std::cout << "Finished generating xml file for NetAnim.\n" << std::endl;
+        anim.UpdateNodeDescription (nodes.Get (i), "node"); // Optional
+        anim.UpdateNodeColor (nodes.Get (i), 255, 0, 0); // Optional
+        anim.UpdateNodeSize ( i, 5.0, 5.0); // Optional
+        //anim.GetNodeEnergyFraction (nodes.Get(i)); // Optional
     }
+
+    anim.EnablePacketMetadata (); // Optional
+    anim.EnableIpv4RouteTracking ("anim/routingtable-leach.routes", Seconds (0), Seconds (5), Seconds (0.25)); //Optional
+    anim.EnableWifiMacCounters (Seconds (0), Seconds (50)); //Optional
+    anim.EnableWifiPhyCounters (Seconds (0), Seconds (50)); //Optional
+    std::cout << "Finished generating xml file for NetAnim.\n" << std::endl;
+    //}
+
+    Ptr<FlowMonitor> flowMonitor;
+    FlowMonitorHelper flowHelper;
+    flowMonitor = flowHelper.InstallAll();
+
     Simulator::Stop (Seconds (m_totalTime));
     Simulator::Run ();
+
+    flowMonitor->SerializeToXmlFile("anim/flowMonitor-leach.flowmon", true, true);
 
     double avgIdle = 0.0, avgTx = 0.0, avgRx = 0.0;
     double energyTx = 0.0, energyRx = 0.0;
@@ -311,6 +320,8 @@ LeachProposal::CaseRun (uint32_t nWifis, uint32_t nSinks, double totalTime, std:
         Ptr<DeviceEnergyModel> basicRadioModelPtr = basicSourcePtr->FindDeviceEnergyModels ("ns3::WifiRadioEnergyModel").Get (0);
         Ptr<WifiRadioEnergyModel> ptr = DynamicCast<WifiRadioEnergyModel> (basicRadioModelPtr);
         NS_ASSERT (basicRadioModelPtr != NULL);
+
+        //TODO: Fixe Time, always shows 0
         avgIdle += ptr->GetIdleTime().ToDouble(Time::MS);
         avgTx += ptr->GetTxTime().ToDouble(Time::MS);
         avgRx += ptr->GetRxTime().ToDouble(Time::MS);
@@ -334,8 +345,8 @@ LeachProposal::CaseRun (uint32_t nWifis, uint32_t nSinks, double totalTime, std:
     //std::cout << m_timeline << std::endl;
     //std::cout << m_txtime << std::endl;
 
-#if 0
-    //sort(m_timeline->begin(), m_timeline->end(), cmp);
+#if 0 //Seg Fault
+    sort(m_timeline->begin(), m_timeline->end(), cmp);
     for (std::vector<struct ns3::leach::msmt>::iterator it=m_timeline->begin(); it!=m_timeline->end(); ++it)
     {
         fprintf(pfile, "%.6f, %.6f\n", it->begin.GetSeconds(), it->end.GetSeconds());
@@ -387,8 +398,8 @@ LeachProposal::CreateDevices ()
     if (m_tracing)
     {
         AsciiTraceHelper ascii;
-        wifiPhy.EnableAsciiAll (ascii.CreateFileStream("trace/ascii/Leach-Manet.tr"));
-        wifiPhy.EnablePcapAll ("trace/pcap/Leach-Manet");
+        wifiPhy.EnableAsciiAll (ascii.CreateFileStream("trace/Leach-Manet.mob"));
+        wifiPhy.EnablePcapAll ("trace/Leach-Manet");
     }
     std::cout << "Finished creating " << (unsigned) m_nWifis << " devices.\n";
 }
@@ -396,35 +407,21 @@ LeachProposal::CreateDevices ()
 void
 LeachProposal::SetupMobility ()
 {
-    std::cout << "Setting Mobility for " << (unsigned) m_nWifis << " nodes.\n";
+    std::cout << "Setting Mobility Model for " << (unsigned) m_nWifis << " nodes.\n";
     MobilityHelper mobility;
-    ObjectFactory pos;
-    uint32_t count = 0;
-    uint64_t streamIndex = 0; // for consistent mobility across scenarios
-    int nodeSpeed = 5;
+
+    int64_t streamIndex = 0; // used to get consistent mobility across scenarios
+    int nodeSpeed = 5;  //m/s
     int nodePause = 0;
 
+    ObjectFactory pos;
     pos.SetTypeId ("ns3::RandomRectanglePositionAllocator");
-    /*
-    pos.Set ("X", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=400.0]"));
-    pos.Set ("Y", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=400.0]"));
-    */
-    /*
-    pos.Set ("X", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=800.0]"));
-    pos.Set ("Y", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=200.0]"));
-    */
+    pos.Set ("X", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=1500.0]"));
+    pos.Set ("Y", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=1500.0]"));
 
-    pos.SetTypeId ("ns3::RandomDiscPositionAllocator");
-    pos.Set ("Rho", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=225.0]"));
-    pos.Set ("X", DoubleValue (225.0));
-    pos.Set ("Y", DoubleValue (225.0));
-
-    Ptr <PositionAllocator> taPositionAlloc = pos.Create ()->GetObject <PositionAllocator> ();
-    //mobility.SetMobilityModel ("ns3::ConstantPositionMobilityModel");
-    //mobility.SetPositionAllocator (taPositionAlloc);
-
+    Ptr<PositionAllocator> taPositionAlloc = pos.Create ()->GetObject<PositionAllocator> ();
     streamIndex += taPositionAlloc->AssignStreams (streamIndex);
-     
+
     std::stringstream ssSpeed;
     ssSpeed << "ns3::UniformRandomVariable[Min=0.0|Max=" << nodeSpeed << "]";
     std::stringstream ssPause;
@@ -434,17 +431,10 @@ LeachProposal::SetupMobility ()
                                     "Pause", StringValue (ssPause.str ()),
                                     "PositionAllocator", PointerValue (taPositionAlloc));
     mobility.SetPositionAllocator (taPositionAlloc);
+    mobility.Install (nodes);
     streamIndex += mobility.AssignStreams (nodes, streamIndex);
     NS_UNUSED (streamIndex); // From this point, streamIndex is unused
 
-    mobility.Install (nodes);
-  
-    for (NodeContainer::Iterator i = nodes.Begin (); i != nodes.End (); ++i)
-    {
-        Ptr<MobilityModel> model = (*i)->GetObject<MobilityModel> ();
-        positions[count++] = model->GetPosition();
-    }
-    std::cout << "Finished setting mobility for " << (unsigned) m_nWifis << " nodes.\n";
 }
 
 void
