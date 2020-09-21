@@ -72,6 +72,7 @@ class LeachProposal
 {
 public:
     LeachProposal ();
+    ~LeachProposal ();
     void CaseRun (uint32_t nWifis,
                   uint32_t nSinks,
                   double totalTime,
@@ -80,6 +81,8 @@ public:
                   uint32_t periodicUpdateInterval,
                   double dataStart,
                   double lambda,
+                  bool verbose,
+                  bool tracing,
                   bool netAnim);
 
 private:
@@ -96,8 +99,11 @@ private:
     uint32_t packetsDecompressed;
     Vector positions[205];
     double m_lambda;
-    //std::vector<struct ns3::leach::msmt>* m_timeline;
-    //std::vector<Time>* m_txtime;
+    bool m_verbose;
+    bool m_tracing;
+    bool m_netAnim;
+    std::vector<struct ns3::leach::msmt>* m_timeline;
+    std::vector<Time>* m_txtime;
 
     NodeContainer nodes;
     NetDeviceContainer devices;
@@ -116,18 +122,18 @@ private:
 
 };
 
-#if 1
 int main (int argc, char **argv)
 {
-    LeachProposal test;
     uint32_t nWifis = 50;
     uint32_t nSinks = 1;
-    double totalTime = 1.0;
-    std::string rate ("8kbps");
+    double totalTime = 2.0;
+    std::string rate ("2048bps");
     std::string phyMode ("DsssRate11Mbps");
     uint32_t periodicUpdateInterval = 5;
     double dataStart = 0.0;
     double lambda = 1.0;
+    bool verbose = false;
+    bool tracing = false;
     bool netAnim = false;
 
     CommandLine cmd;
@@ -138,35 +144,36 @@ int main (int argc, char **argv)
     cmd.AddValue ("rate",                   "CBR traffic rate",         rate);
     cmd.AddValue ("periodicUpdateInterval", "Periodic Interval Time",   periodicUpdateInterval);
     cmd.AddValue ("dataStart",              "Time at which nodes start to transmit data", dataStart);
+    cmd.AddValue ("verbose",                "Enable Logging",           verbose);
+    cmd.AddValue ("tracing",                "Enable PCAP and ASCII Tracing", tracing);
     cmd.AddValue ("netAnim",                "GUI Animation Interface",  netAnim);
     cmd.Parse (argc, argv);
 
     SeedManager::SetSeed (12345);
     std::cout << "Seed Set\n";
 
-    //Config::SetDefault ("ns3::WsnApplication::PacketSize", UintegerValue(64));
-    //Config::SetDefault ("ns3::WsnApplication::DataRate", DataRateValue (rate));
+    //Config::SetDefault ("ns3::leach::WsnApplication::PacketSize", UintegerValue(64));
+    //Config::SetDefault ("ns3::leach::WsnApplication::DataRate", DataRateValue (rate));
     Config::SetDefault ("ns3::WifiRemoteStationManager::NonUnicastMode", StringValue (phyMode));
     Config::SetDefault ("ns3::WifiRemoteStationManager::RtsCtsThreshold", StringValue ("2000"));
 
-    test = LeachProposal ();
-    test.CaseRun (nWifis, nSinks, totalTime, rate, phyMode, periodicUpdateInterval, dataStart, lambda, netAnim);
+    //test = LeachProposal ();
+    LeachProposal *test = new LeachProposal;
+    test->CaseRun (nWifis, nSinks, totalTime, rate, phyMode, periodicUpdateInterval, dataStart, lambda, verbose, tracing, netAnim);
+    //delete test;
 
     return 0;
 }
-#endif
-#if 0
-int main(int argc, char *argv[])
-{
-    return 0;
-}
-#endif
 
 LeachProposal::LeachProposal ()
   : bytesTotal (0),
     packetsReceived (0),
     packetsReceivedYetExpired (0),
     packetsDecompressed (0)
+{
+}
+
+LeachProposal::~LeachProposal()
 {
 }
 
@@ -200,8 +207,10 @@ LeachProposal::ReceivePacket (Ptr <Socket> socket)
         }
         packetsReceived++;
     }
-    NS_LOG_DEBUG("packet size = " << packetSize << ", packetCount = " << packetCount);
-    NS_LOG_DEBUG("packet size/packet count = " << packetSize/(double)packetCount);
+    NS_LOG_UNCOND ("packet size = " << packetSize << ", packetCount = " << packetCount);
+    NS_LOG_UNCOND ("packet size/packet count = " << packetSize/(double)packetCount);
+    //std::cout << "packet size = " << packetSize << ", packetCount = " << packetCount << std::endl;
+    //std::cout << "packet size/packet count = " << packetSize/(double)packetCount << std::endl;
 }
 
 Ptr <Socket>
@@ -218,10 +227,10 @@ LeachProposal::SetupPacketReceive (Ipv4Address addr, Ptr <Node> node)
     return sink;
 }
 
-#if 1
 void
 LeachProposal::CaseRun (uint32_t nWifis, uint32_t nSinks, double totalTime, std::string rate,
-                           std::string phyMode, uint32_t periodicUpdateInterval, double dataStart, double lambda, bool netAnim)
+                           std::string phyMode, uint32_t periodicUpdateInterval, double dataStart, 
+                           double lambda, bool verbose, bool tracing, bool netAnim)
 {
     m_nWifis = nWifis;
     m_nSinks = nSinks;
@@ -231,6 +240,9 @@ LeachProposal::CaseRun (uint32_t nWifis, uint32_t nSinks, double totalTime, std:
     m_periodicUpdateInterval = periodicUpdateInterval;
     m_dataStart = dataStart;
     m_lambda = lambda;
+    m_verbose = verbose;
+    m_tracing = tracing;
+    m_netAnim = netAnim;
 
     std::stringstream ss;
     ss << m_nWifis;
@@ -250,18 +262,20 @@ LeachProposal::CaseRun (uint32_t nWifis, uint32_t nSinks, double totalTime, std:
     InstallApplications ();
 
     std::cout << "\nStarting simulation for " << m_totalTime << " s ...\n\n";
-    //if (netAnim)
-    //{
-        std::cout << "Generating xml file for NetAnim." << std::endl;
+    if (m_netAnim)
+    {
+        std::cout << "Generating xml file for NetAnim..." << std::endl;
         AnimationInterface anim ("anim/leach-animation.xml"); // Mandatory
         anim.UpdateNodeDescription (nodes.Get (0), "sink"); // Optional
         anim.UpdateNodeColor (nodes.Get (0), 0, 0, 255); // Optional
-        anim.UpdateNodeSize ( 0, 5.0, 5.0); // Optional
+        anim.UpdateNodeSize ( 0, 10.0, 10.0); // Optional
+        //anim.GetNodeEnergyFraction(nodes.Get(0)); // Optional
         for (uint32_t i = 1; i < m_nWifis; ++i)
         {
             anim.UpdateNodeDescription (nodes.Get (i), "node"); // Optional
             anim.UpdateNodeColor (nodes.Get (i), 255, 0, 0); // Optional
-            anim.UpdateNodeSize ( i, 3.0, 3.0); // Optional
+            anim.UpdateNodeSize ( i, 5.0, 5.0); // Optional
+            //anim.GetNodeEnergyFraction (nodes.Get(i)); // Optional
         }
 
         anim.EnablePacketMetadata (); // Optional
@@ -269,12 +283,13 @@ LeachProposal::CaseRun (uint32_t nWifis, uint32_t nSinks, double totalTime, std:
         anim.EnableWifiMacCounters (Seconds (0), Seconds (50)); //Optional
         anim.EnableWifiPhyCounters (Seconds (0), Seconds (50)); //Optional
         //std::cout << "Finished generating xml file for NetAnim.\n" << std::endl;
-    //}
+    }
     Simulator::Stop (Seconds (m_totalTime));
     Simulator::Run ();
 
     double avgIdle = 0.0, avgTx = 0.0, avgRx = 0.0;
     double energyTx = 0.0, energyRx = 0.0;
+#if 0
     char file_name[20];
     FILE* pfile, *p2file;
 
@@ -282,6 +297,7 @@ LeachProposal::CaseRun (uint32_t nWifis, uint32_t nSinks, double totalTime, std:
     pfile = fopen(file_name, "w");
     snprintf(file_name, 19, "txtime%d-%d", m_nWifis, (int)lambda);
     p2file = fopen(file_name, "w");
+#endif
 
     std::cout << "Total bytes received: " << bytesTotal << "\n";
     std::cout << "Total packets received: " << packetsReceived << "\n"
@@ -302,21 +318,23 @@ LeachProposal::CaseRun (uint32_t nWifis, uint32_t nSinks, double totalTime, std:
         energyRx += ptr->GetRxTime().ToDouble(Time::MS) * ptr->GetTxCurrentA();
         //NS_LOG_UNCOND("Idle time: " << ptr->GetIdleTime() << ", Tx Time: " << ptr->GetTxTime() << ", Rx Time: " << ptr->GetRxTime());
     }
-    //std::cout << avgIdle << std::endl;
 
     std::cout << "Avg Idle time(ms):  " << avgIdle/m_nWifis << "\n"
-              << "Avg Tx Time(ms):  " <<   avgTx/m_nWifis   << "\n"
-              << "Avg Rx Time(ms): " <<    avgRx/m_nWifis   << "\n";
+              << "Avg Tx Time(ms):  "   << avgTx/m_nWifis   << "\n"
+              << "Avg Rx Time(ms): "   <<  avgRx/m_nWifis   << "\n";
 
     std::cout << "Avg Tx energy(mJ): " << energyTx/m_nWifis << "\n"
               << "Avg Rx energy(mJ): " << energyRx/m_nWifis << "\n";
 
     std::cout << "\nGenerating Trace File." << std::endl;
     Ptr<leach::RoutingProtocol> leachTracer = DynamicCast<leach::RoutingProtocol> ((nodes.Get(m_nWifis/2))->GetObject<Ipv4> ()->GetRoutingProtocol());
-#if 0
     m_timeline = leachTracer->getTimeline();
     m_txtime = leachTracer->getTxTime();
-	
+
+    //std::cout << m_timeline << std::endl;
+    //std::cout << m_txtime << std::endl;
+
+#if 0
     //sort(m_timeline->begin(), m_timeline->end(), cmp);
     for (std::vector<struct ns3::leach::msmt>::iterator it=m_timeline->begin(); it!=m_timeline->end(); ++it)
     {
@@ -328,13 +346,12 @@ LeachProposal::CaseRun (uint32_t nWifis, uint32_t nSinks, double totalTime, std:
         fprintf(p2file, "%.6f\n", it->GetSeconds());
     }
     std::cout << "Here" << std::endl;
-#endif
   
     fclose(pfile);
     fclose(p2file);
+#endif
     Simulator::Destroy ();
 }
-#endif
 
 void
 LeachProposal::CreateNodes ()
@@ -357,14 +374,22 @@ LeachProposal::CreateDevices ()
     wifiChannel.AddPropagationLoss ("ns3::FriisPropagationLossModel");
     wifiPhy.SetChannel (wifiChannel.Create ());
     WifiHelper wifi;
+    if (m_verbose)
+    {
+        wifi.EnableLogComponents();
+    }
     // TODO: Change Standard to WIFI_PHY_STANDARD_80211ah
     wifi.SetStandard (WIFI_PHY_STANDARD_80211b);
     wifi.SetRemoteStationManager ("ns3::ConstantRateWifiManager", "DataMode", StringValue (m_phyMode), "ControlMode",
                                 StringValue (m_phyMode));
     devices = wifi.Install (wifiPhy, wifiMac, nodes);
 
-    AsciiTraceHelper ascii;
-    //wifiPhy.EnablePcapAll ("Leach-Manet");
+    if (m_tracing)
+    {
+        AsciiTraceHelper ascii;
+        wifiPhy.EnableAsciiAll (ascii.CreateFileStream("trace/ascii/Leach-Manet.tr"));
+        wifiPhy.EnablePcapAll ("trace/pcap/Leach-Manet");
+    }
     std::cout << "Finished creating " << (unsigned) m_nWifis << " devices.\n";
 }
 
@@ -440,20 +465,20 @@ LeachProposal::SetupEnergyModel()
     DeviceEnergyModelContainer deviceModels = radioEnergyHelper.Install (devices, sources);
     /***************************************************************************/
 
-    /*
+    
     for (uint32_t i=0; i<m_nWifis; i++)
     {
         Ptr<BasicEnergySource> basicSourcePtr = DynamicCast<BasicEnergySource> (sources.Get (i));
         basicSourcePtr->TraceConnectWithoutContext ("RemainingEnergy", MakeCallback (&RemainingEnergy));
         // device energy model
-        Ptr<DeviceEnergyModel> basicRadioModelPtr =
-        basicSourcePtr->FindDeviceEnergyModels ("ns3::WifiRadioEnergyModel").Get (0);
+        Ptr<DeviceEnergyModel> basicRadioModelPtr = basicSourcePtr->FindDeviceEnergyModels ("ns3::WifiRadioEnergyModel").Get (0);
         NS_ASSERT (basicRadioModelPtr != NULL);
         basicRadioModelPtr->TraceConnectWithoutContext ("TotalEnergyConsumption", MakeCallback (&TotalEnergy));
     }
-    */
+    
     std::cout << "Finished setting Energy Model for " << (unsigned) m_nWifis << " nodes.\n";
 }
+
 
 #if 1
 void
@@ -464,21 +489,22 @@ LeachProposal::InstallInternetStack (std::string tr_name)
     //std::cout << m_lambda << std::endl;
     //leach.Set ("Lambda", DoubleValue (m_lambda));
     //leach.Set ("PeriodicUpdateInterval", TimeValue (Seconds (m_periodicUpdateInterval)));
-    //std::cout << "Here 1\n";
     InternetStackHelper stack;
-#if 0
-    uint32_t count = 0;
+#if 1
+    //uint32_t count = 0;
+    stack.Install (nodes); 
     int j=0;
     for (NodeContainer::Iterator i = nodes.Begin (); i != nodes.End (); ++i, ++j)
     {
-        leach.Set("Position", Vector3DValue(positions[count++]));
+        //leach.Set("Position", Vector4DValue(positions[count++]));
         stack.SetRoutingHelper (leach); // has effect on the next Install ()
-        stack.Install (*i);
+        //stack.Install (*i);
         Ptr<leach::RoutingProtocol> leachTracer = DynamicCast<leach::RoutingProtocol> ((*i)->GetObject<Ipv4> ()->GetRoutingProtocol());
-        leachTracer->TraceConnectWithoutContext ("DroppedCount", MakeCallback (&CountDroppedPkt));
+        //TODO: Fix next line
+        //leachTracer->TraceConnectWithoutContext ("DroppedCount", MakeCallback (&CountDroppedPkt));
     }
 #endif
-    stack.Install (nodes);        // should give change to leach protocol on the position property
+    //stack.Install (nodes);        // should give change to leach protocol on the position property
     Ipv4AddressHelper address;
     address.SetBase ("10.1.1.0", "255.255.255.0");
     interfaces = address.Assign (devices);
@@ -493,11 +519,11 @@ LeachProposal::InstallApplications ()
     Ipv4Address nodeAddress = node->GetObject<Ipv4> ()->GetAddress (1, 0).GetLocal ();
     Ptr<Socket> sink = SetupPacketReceive (nodeAddress, node);
     
-    //TODO: use wsn-helper
+    //TODO: Use WsnHelper
     //WsnHelper wsn1 ("ns3::UdpSocketFactory", Address (InetSocketAddress (interfaces.GetAddress (0), port)));
     OnOffHelper wsn1 ("ns3::UdpSocketFactory", Address (InetSocketAddress (interfaces.GetAddress (0), port)));
     //wsn1.SetAttribute ("PktGenRate", DoubleValue(m_lambda));
-    // 0 for periodic, 1 for Poisson
+    //// 0 for periodic, 1 for Poisson
     //wsn1.SetAttribute ("PktGenPattern", IntegerValue(0));
     //wsn1.SetAttribute ("PacketDeadlineLen", IntegerValue(3000000000));  // default
     //wsn1.SetAttribute ("PacketDeadlineMin", IntegerValue(5000000000));  // default
@@ -512,7 +538,6 @@ LeachProposal::InstallApplications ()
         apps1.Stop (Seconds (m_totalTime));
         //TODO: Fix next line
         //wsnapp->TraceConnectWithoutContext ("PktCount", MakeCallback (&TotalPackets));
-        //std::cout << "Installed Application on device " << clientNode << std::endl;
     }
     std::cout << "Finished installing Applications on " << (unsigned) m_nWifis << " devices.\n";
 }
@@ -1799,8 +1824,8 @@ WsnApplication::GetTypeId (void)
 }
 
 
-WsnApplication::WsnApplication ()
-  : m_socket (0),
+WsnApplication::WsnApplication () : 
+    m_socket (0),
     m_connected (false),
     m_residualBits (0),
     m_lastStartTime (Seconds (0)),
