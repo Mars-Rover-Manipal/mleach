@@ -18,8 +18,8 @@
  * Author: Sidharth Nabar <snabar@uw.edu>, He Wu <mdzz@u.washington.edu>
  */
 
+#include "ns3/fatal-error.h"
 #include "ns3/log.h"
-#include "ns3/nstime.h"
 #include "ns3/simulator.h"
 #include "ns3/pointer.h"
 #include "ns3/energy-source.h"
@@ -82,7 +82,7 @@ WifiRadioEnergyModel::GetTypeId (void)
     .AddAttribute ("IdleTime", "The default radio idle time.",
                    TimeValue (Seconds(0)),
                    MakeTimeAccessor (&WifiRadioEnergyModel::GetIdleTime),
-                   MakeTimeChecker ())
+                   MakeTimeChecker())
     .AddAttribute ("TxTime", "The default radio TX time.",
                    TimeValue (Seconds(0)),
                    MakeTimeAccessor (&WifiRadioEnergyModel::GetTxTime),
@@ -101,15 +101,16 @@ WifiRadioEnergyModel::GetTypeId (void)
 
 WifiRadioEnergyModel::WifiRadioEnergyModel ()
   : m_source (0),
-    m_rxTime(Time(0)),
-    m_txTime(Time(0)),
-    m_idleTime(Time(0)),
     m_currentState (WifiPhyState::IDLE),
     m_lastUpdateTime (Seconds (0.0)),
     m_nPendingChangeState (0)
 {
   NS_LOG_FUNCTION (this);
   m_energyDepletionCallback.Nullify ();
+  m_idleTime = Time (0);
+  m_txTime = Time (0);
+  m_rxTime = Time (0);
+  m_isSupersededChangeState = false;
   // set callback for WifiPhy listener
   m_listener = new WifiRadioEnergyModelPhyListener;
   m_listener->SetChangeStateCallback (MakeCallback (&DeviceEnergyModel::ChangeState, this));
@@ -274,15 +275,6 @@ WifiRadioEnergyModel::SetTxCurrentModel (const Ptr<WifiTxCurrentModel> model)
   m_txCurrentModel = model;
 }
 
-void
-WifiRadioEnergyModel::SetTxCurrentFromModel (double txPowerDbm)
-{
-  if (m_txCurrentModel)
-    {
-      m_txCurrentA = m_txCurrentModel->CalcTxCurrent (txPowerDbm);
-    }
-}
-
 Time
 WifiRadioEnergyModel::GetIdleTime() const
 {
@@ -290,15 +282,24 @@ WifiRadioEnergyModel::GetIdleTime() const
 }
 
 Time
-WifiRadioEnergyModel::GetRxTime() const
+WifiRadioEnergyModel::GetTxTime() const
 {
-    return m_rxTime;
+  return m_txTime;
 }
 
 Time
-WifiRadioEnergyModel::GetTxTime() const
+WifiRadioEnergyModel::GetRxTime() const
 {
-    return m_txTime;
+  return m_rxTime;
+}
+
+void
+WifiRadioEnergyModel::SetTxCurrentFromModel (double txPowerDbm)
+{
+  if (m_txCurrentModel)
+    {
+      m_txCurrentA = m_txCurrentModel->CalcTxCurrent (txPowerDbm);
+    }
 }
 
 Time
@@ -314,6 +315,7 @@ WifiRadioEnergyModel::GetMaximumTimeInState (int state) const
   return Seconds (remainingEnergy / (current * supplyVoltage));
 }
 
+#if 0 // This is origin method
 void
 WifiRadioEnergyModel::ChangeState (int newState)
 {
@@ -351,6 +353,79 @@ WifiRadioEnergyModel::ChangeState (int newState)
 
   // notify energy source
   m_source->UpdateEnergySource ();
+
+  // in case the energy source is found to be depleted during the last update, a callback might be
+  // invoked that might cause a change in the Wifi PHY state (e.g., the PHY is put into SLEEP mode).
+  // This in turn causes a new call to this member function, with the consequence that the previous
+  // instance is resumed after the termination of the new instance. In particular, the state set
+  // by the previous instance is erroneously the final state stored in m_currentState. The check below
+  // ensures that previous instances do not change m_currentState.
+
+  if (m_nPendingChangeState <= 1 && m_currentState != WifiPhyState::OFF)
+    {
+      // update current state & last update time stamp
+      SetWifiRadioState ((WifiPhyState) newState);
+
+      // some debug message
+      NS_LOG_DEBUG ("WifiRadioEnergyModel:Total energy consumption is " <<
+                    m_totalEnergyConsumption << "J");
+    }
+
+  m_nPendingChangeState--;
+}
+#endif
+
+//Custom Method
+void
+WifiRadioEnergyModel::ChangeState (int newState)
+{
+  NS_LOG_FUNCTION (this << newState);
+
+  Time duration = Simulator::Now() - m_lastUpdateTime;
+  NS_ASSERT (duration.GetNanoSeconds() >= 0);
+
+  // Energy to decrease = current * voltage * time
+  double energyToDecrease = 0.0;
+  double supplyVoltage = m_source->GetSupplyVoltage ();
+  switch (m_currentState) 
+  {
+    case WifiPhyState::IDLE:
+      energyToDecrease = duration.GetSeconds () * m_idleCurrentA * supplyVoltage;
+      m_idleTime += duration;
+      break;
+    case WifiPhyState::CCA_BUSY:
+      energyToDecrease = duration.GetSeconds () * m_ccaBusyCurrentA * supplyVoltage;
+      break;
+    case WifiPhyState::TX:
+      energyToDecrease = duration.GetSeconds () * m_txCurrentA * supplyVoltage;
+      m_txTime += duration;
+      break;
+    case WifiPhyState::RX:
+      energyToDecrease = duration.GetSeconds () * m_rxCurrentA * supplyVoltage;
+      m_rxTime += duration;
+      break;
+    case WifiPhyState::SWITCHING:
+      energyToDecrease = duration.GetSeconds () * m_switchingCurrentA * supplyVoltage;
+      break;
+    case WifiPhyState::SLEEP:
+      energyToDecrease = duration.GetSeconds () * m_sleepCurrentA * supplyVoltage;
+      break;
+    case WifiPhyState::OFF:
+      break;
+    default: 
+      NS_FATAL_ERROR ("WifiRadioEnergyModel::Undefined radio state: " <<m_currentState);
+  }
+
+  // Update total energy consumption
+  m_totalEnergyConsumption += energyToDecrease;
+
+  // Update last update time stamp
+  m_lastUpdateTime = Simulator::Now();
+
+  m_nPendingChangeState++;
+
+  // Notify energy source
+  m_source->UpdateEnergySource();
 
   // in case the energy source is found to be depleted during the last update, a callback might be
   // invoked that might cause a change in the Wifi PHY state (e.g., the PHY is put into SLEEP mode).

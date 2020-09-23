@@ -321,7 +321,6 @@ LeachProposal::CaseRun (uint32_t nWifis, uint32_t nSinks, double totalTime, std:
         Ptr<WifiRadioEnergyModel> ptr = DynamicCast<WifiRadioEnergyModel> (basicRadioModelPtr);
         NS_ASSERT (basicRadioModelPtr != NULL);
 
-        //TODO: Fixe Time, always shows 0
         avgIdle += ptr->GetIdleTime().ToDouble(Time::MS);
         avgTx += ptr->GetTxTime().ToDouble(Time::MS);
         avgRx += ptr->GetRxTime().ToDouble(Time::MS);
@@ -496,7 +495,7 @@ LeachProposal::InstallInternetStack (std::string tr_name)
 #endif
     //stack.Install (nodes);        // should give change to leach protocol on the position property
     Ipv4AddressHelper address;
-    address.SetBase ("10.1.1.0", "255.255.255.0");
+    address.SetBase ("10.1.1.0", "255.255.252.0");
     interfaces = address.Assign (devices);
     std::cout << "Finished installing Internet Stack for " << (unsigned) m_nWifis << " nodes.\n";
 }
