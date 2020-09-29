@@ -8,6 +8,8 @@
 #include "ns3/internet-module.h"
 #include "leach-helper.h"
 #include "leach-routing-protocol.h"
+#include "ns3/nstime.h"
+#include "ns3/ptr.h"
 #include "ns3/uinteger.h"
 #include "wsn-helper.h"
 #include "ns3/wifi-module.h"
@@ -281,7 +283,7 @@ LeachProposal::CaseRun (uint32_t nWifis, uint32_t nSinks, double totalTime, std:
     }
 
     anim.EnablePacketMetadata (); // Optional
-    anim.EnableIpv4RouteTracking ("anim/routingtable-leach.routes", Seconds (0), Seconds (5), Seconds (0.25)); //Optional
+    anim.EnableIpv4RouteTracking ("anim/routingtable-leach.xml", Seconds (0), Seconds (5), Seconds (0.25)); //Optional
     anim.EnableWifiMacCounters (Seconds (0), Seconds (50)); //Optional
     anim.EnableWifiPhyCounters (Seconds (0), Seconds (50)); //Optional
     std::cout << "Finished generating xml file for NetAnim.\n" << std::endl;
@@ -381,7 +383,7 @@ LeachProposal::CreateDevices ()
     YansWifiPhyHelper wifiPhy = YansWifiPhyHelper::Default ();
     YansWifiChannelHelper wifiChannel;
     wifiChannel.SetPropagationDelay ("ns3::ConstantSpeedPropagationDelayModel");
-    wifiChannel.AddPropagationLoss ("ns3::FriisPropagationLossModel");
+    wifiChannel.AddPropagationLoss ("ns3::RangePropagationLossModel", "MaxRange", DoubleValue(1000));
     wifiPhy.SetChannel (wifiChannel.Create ());
     WifiHelper wifi;
     if (m_verbose)
@@ -398,7 +400,7 @@ LeachProposal::CreateDevices ()
     {
         AsciiTraceHelper ascii;
         wifiPhy.EnableAsciiAll (ascii.CreateFileStream("trace/Leach-Manet.mob"));
-        wifiPhy.EnablePcapAll ("trace/Leach-Manet");
+        wifiPhy.EnablePcapAll ("trace/pcap/Leach-Manet");
     }
     std::cout << "Finished creating " << (unsigned) m_nWifis << " devices.\n";
 }
@@ -415,8 +417,8 @@ LeachProposal::SetupMobility ()
 
     ObjectFactory pos;
     pos.SetTypeId ("ns3::RandomRectanglePositionAllocator");
-    pos.Set ("X", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=1500.0]"));
-    pos.Set ("Y", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=1500.0]"));
+    pos.Set ("X", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=7500.0]"));
+    pos.Set ("Y", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=7500.0]"));
 
     Ptr<PositionAllocator> taPositionAlloc = pos.Create ()->GetObject<PositionAllocator> ();
     streamIndex += taPositionAlloc->AssignStreams (streamIndex);
@@ -491,6 +493,11 @@ LeachProposal::InstallInternetStack (std::string tr_name)
         Ptr<leach::RoutingProtocol> leachTracer = DynamicCast<leach::RoutingProtocol> ((*i)->GetObject<Ipv4> ()->GetRoutingProtocol());
         //TODO: Fix next line
         //leachTracer->TraceConnectWithoutContext ("DroppedCount", MakeCallback (&CountDroppedPkt));
+        if (0)
+        {
+            Ptr<OutputStreamWrapper> routingStream = Create<OutputStreamWrapper> (("trace/" + tr_name + ".routes"), std::ios::out);
+            leach.PrintRoutingTableAt(Seconds(m_periodicUpdateInterval), *i, routingStream);
+        }
     }
 #endif
     //stack.Install (nodes);        // should give change to leach protocol on the position property
