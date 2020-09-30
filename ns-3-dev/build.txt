@@ -1,0 +1,5 @@
+Waf: Entering directory `/home/harshil/workspace/ns-3-allinone/ns-3-dev/build'
+[2384/2764] Compiling scratch/leach-proposal.cc
+[2390/2764] Compiling scratch/leach-routing-protocol.cc
+[2391/2764] Running git_ns3_version_info
+Waf: Leaving directory `/home/harshil/workspace/ns-3-allinone/ns-3-dev/build'
