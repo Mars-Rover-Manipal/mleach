@@ -5,17 +5,20 @@
 #include <iostream>
 #include <cmath>
 #include <ostream>
+#include "ns3/assert.h"
+#include "ns3/callback.h"
 #include "ns3/core-module.h"
 #include "ns3/network-module.h"
 #include "ns3/applications-module.h"
 #include "ns3/config-store-module.h"
 #include "ns3/internet-module.h"
-#include "ns3/nstime.h"
+#include "ns3/ptr.h"
 #include "ns3/yans-wifi-helper.h"
 #include "ns3/mobility-module.h"
 #include "ns3/dsdv-helper.h"
 #include "ns3/energy-module.h"
 #include "ns3/wifi-radio-energy-model-helper.h"
+#include "ns3/netanim-module.h"
 
 using namespace ns3;
 
@@ -71,20 +74,30 @@ private:
 };
 
 
+void RemainingEnergy (double oldValue, double remainingEnergy)
+{
+    //NS_LOG_UNCOND (Simulator::Now ().GetSeconds() << " " << remainingEnergy);
+}
+
+void TotalEnergy (double oldValue, double totalEnergy)
+{
+    //NS_LOG_UNCOND (Simulator::Now ().GetSeconds() << " " << totalEnergy);
+}
+
 int main(int argc, char** argv)
 {
   DsdvProposal test;
 
   uint32_t nWifis = 50;
   uint32_t nSinks = 1;
-  double totalTime = 100.0;
-  std::string rate ("8kbps");
+  double totalTime = 70.0;
+  std::string rate ("1024bps");
   std::string phyMode ("DsssRate11Mbps");
   uint32_t nodeSpeed = 10; // in m/s
   std::string appl = "all";
-  uint32_t periodicUpdateInterval = 15;
-  uint32_t settlingTime = 6;
-  double dataStart = 50.0;
+  uint32_t periodicUpdateInterval = 5;
+  uint32_t settlingTime = 0;
+  double dataStart = 0.0;
   bool printRoutingTable = true;
   std::string CSVfileName = "trace/DsdvManetExample.csv";
 
@@ -163,6 +176,28 @@ void DsdvProposal::CaseRun (uint32_t nWifis, uint32_t nSinks, double totalTime, 
 
   std::cout << "\nStarting simulation for " << m_totalTime << " seconds...\n";
 
+  std::cout << "Generating xml file for NetAnim..." << std::endl;
+
+  AnimationInterface anim("anim/dsdv-animation.xml");
+  anim.UpdateNodeDescription (nodes.Get (0), "sink"); // Optional
+  anim.UpdateNodeColor (nodes.Get (0), 0, 0, 255); // Optional
+  anim.UpdateNodeSize ( 0, 20.0, 20.0); // Optional
+  anim.SetMaxPktsPerTraceFile(999999999);
+  //anim.GetNodeEnergyFraction(nodes.Get(0)); // Optional
+  for (uint32_t i = 1; i < m_nWifis; ++i)
+  {
+      anim.UpdateNodeDescription (nodes.Get (i), "node"); // Optional
+      anim.UpdateNodeColor (nodes.Get (i), 255, 0, 0); // Optional
+      anim.UpdateNodeSize ( i, 5.0, 5.0); // Optional
+      //anim.GetNodeEnergyFraction (nodes.Get(i)); // Optional
+  }
+
+  anim.EnablePacketMetadata (); // Optional
+  anim.EnableIpv4RouteTracking ("anim/routingtable-leach.xml", Seconds (0), Seconds (5), Seconds (0.25)); //Optional
+  anim.EnableWifiMacCounters (Seconds (0), Seconds (50)); //Optional
+  anim.EnableWifiPhyCounters (Seconds (0), Seconds (50)); //Optional
+  std::cout << "Finished generating xml file for NetAnim.\n" << std::endl;
+
   std::cout << bytesTotal;
 
   Simulator::Stop(Seconds(m_totalTime));
@@ -179,12 +214,13 @@ void DsdvProposal::createNodes ()
 
 void DsdvProposal::createDevices (std::string tr_name)
 {
+  int range = 200;
   WifiMacHelper wifiMac;
   wifiMac.SetType("ns3::AdhocWifiMac");
   YansWifiPhyHelper wifiPhy;
   YansWifiChannelHelper wifiChannel;
   wifiChannel.SetPropagationDelay("ns3::ConstantSpeedPropagationDelayModel");
-  wifiChannel.AddPropagationLoss("ns3::FriisPropagationLossModel");
+  wifiChannel.AddPropagationLoss("ns3::RangePropagationLossModel", "MaxRange", DoubleValue(range));
   wifiPhy.SetChannel(wifiChannel.Create());
   WifiHelper wifi;
   wifi.SetStandard(WIFI_STANDARD_80211b);
@@ -217,31 +253,29 @@ void DsdvProposal::installInternetStack (std::string tr_name)
 
 void DsdvProposal::installApplications ()
 {
-  for (uint32_t i = 0; i <= m_nSinks; i++)
-    {
-      Ptr<Node> node = NodeList::GetNode(i);
-      Ipv4Address nodeAddress = node->GetObject<Ipv4>()->GetAddress(1, 0).GetLocal();
-      Ptr<Socket> sink = setupReceivePacket(nodeAddress, node);
-    }
+//  for (uint32_t i = 0; i <= m_nSinks; i++)
+//    {
+//      Ptr<Node> node = NodeList::GetNode(i);
+//      Ipv4Address nodeAddress = node->GetObject<Ipv4>()->GetAddress(1, 0).GetLocal();
+//      Ptr<Socket> sink = setupReceivePacket(nodeAddress, node);
+//    }
+  Ptr<Node> node = NodeList::GetNode(0);
+  Ipv4Address nodeAddress = node->GetObject<Ipv4>()->GetAddress(1, 0).GetLocal();
+  Ptr<Socket> sink = setupReceivePacket(nodeAddress, node);
 
-  for (uint32_t clientNode = 0; clientNode <= m_nWifis-1; clientNode++)
+  for (uint32_t clientNode = 1; clientNode <= m_nWifis-1; clientNode++)
   {
-    for (uint32_t j = 0; j <= m_nSinks-1; j++)
-    {
-      OnOffHelper onoff1("ns3::UdpSocketFactory", Address(InetSocketAddress(interfaces.GetAddress(j), port)));
-      onoff1.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1.0]"));
-      onoff1.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0.0]"));
+    OnOffHelper onoff1("ns3::UdpSocketFactory", Address(InetSocketAddress(interfaces.GetAddress(0), port)));
+//      onoff1.SetAttribute("OnTime", StringValue("ns3::ConstantRandomVariable[Constant=1.0]"));
+//      onoff1.SetAttribute("OffTime", StringValue("ns3::ConstantRandomVariable[Constant=0.0]"));
 
-      if (j != clientNode)
-      {
-        ApplicationContainer apps1 = onoff1.Install(nodes.Get(clientNode));
-        Ptr<UniformRandomVariable> var = CreateObject<UniformRandomVariable>();
-        apps1.Start(Seconds(var->GetValue(m_dataStart, m_dataStart+1)));
-        apps1.Stop(Seconds(m_totalTime));
-      }
-    }
+    ApplicationContainer apps1 = onoff1.Install(nodes.Get(clientNode));
+    Ptr<UniformRandomVariable> var = CreateObject<UniformRandomVariable>();
+    apps1.Start(Seconds(var->GetValue(m_dataStart, m_dataStart+1)));
+    apps1.Stop(Seconds(m_totalTime));
   }
 }
+
 
 void DsdvProposal::setupMobility ()
 {
@@ -254,8 +288,8 @@ void DsdvProposal::setupMobility ()
 
   ObjectFactory pos;
   pos.SetTypeId ("ns3::RandomRectanglePositionAllocator");
-  pos.Set ("X", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=7500.0]"));
-  pos.Set ("Y", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=7500.0]"));
+  pos.Set ("X", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=1000.0]"));
+  pos.Set ("Y", StringValue ("ns3::UniformRandomVariable[Min=0.0|Max=1000.0]"));
 
   Ptr<PositionAllocator> taPositionAlloc = pos.Create ()->GetObject<PositionAllocator> ();
   streamIndex += taPositionAlloc->AssignStreams (streamIndex);
@@ -282,12 +316,14 @@ void DsdvProposal::setupEnergy ()
   WifiRadioEnergyModelHelper radioEnergyHelper;
   DeviceEnergyModelContainer deviceModels = radioEnergyHelper.Install(devices, sources);
 
-  // TODO: Trace energy
-  //for (uint32_t i=0; i<m_nWifis; i++)
-  //{
-  //  Ptr<BasicEnergySource> basicSourcePtr = DynamicCast<BasicEnergySource>(sources.Get(i));
-  //  basicSourcePtr->TraceConnectWithoutContext("RemainingEnergy", MakeCallback(&RemainingEnergy));
-  //}
+  for (uint32_t i=0; i<m_nWifis; i++)
+  {
+    Ptr<BasicEnergySource> basicSourcePtr = DynamicCast<BasicEnergySource>(sources.Get(i));
+    basicSourcePtr->TraceConnectWithoutContext("RemainingEnergy", MakeCallback(&RemainingEnergy));
+    Ptr<DeviceEnergyModel> basicRadioModelPtr = basicSourcePtr->FindDeviceEnergyModels("ns3::WifiRadioEnergyModel").Get(0);
+    NS_ASSERT(basicRadioModelPtr != NULL);
+    basicRadioModelPtr->TraceConnectWithoutContext("TotalEnergyConsumption", MakeCallback(&TotalEnergy));
+  }
 }
 
 Ptr<Socket> DsdvProposal::setupReceivePacket (Ipv4Address addr, Ptr<Node> node)
@@ -303,11 +339,12 @@ Ptr<Socket> DsdvProposal::setupReceivePacket (Ipv4Address addr, Ptr<Node> node)
 
 void DsdvProposal::receivePacket (Ptr<Socket> socket)
 {
-  NS_LOG_UNCOND(Simulator::Now().As(Time::S) << " Received one packet!");
+  //NS_LOG_UNCOND(Simulator::Now().As(Time::S) << " Received one packet!");
   Ptr<Packet> packet;
   while ((packet = socket->Recv()))
   {
     bytesTotal += packet->GetSize();
+    std::cout << Simulator::Now().GetSeconds() << " " << bytesTotal << std::endl;
     packetsReceived += 1;
   }
 }
