@@ -1,2 +1,4 @@
 ns-3-dev/build/
 ns-3-dev/.cache
+ns-3-dev/anim
+ns-3-dev/trace

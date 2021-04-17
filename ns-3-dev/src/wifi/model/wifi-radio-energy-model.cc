@@ -23,6 +23,7 @@
 #include "ns3/simulator.h"
 #include "ns3/pointer.h"
 #include "ns3/energy-source.h"
+#include "src/wifi/model/wifi-phy-state.h"
 #include "wifi-radio-energy-model.h"
 #include "wifi-tx-current-model.h"
 
@@ -131,9 +132,9 @@ WifiRadioEnergyModel::SetEnergySource (const Ptr<EnergySource> source)
   NS_LOG_FUNCTION (this << source);
   NS_ASSERT (source != NULL);
   m_source = source;
-  m_switchToOffEvent.Cancel ();
-  Time durationToOff = GetMaximumTimeInState (m_currentState);
-  m_switchToOffEvent = Simulator::Schedule (durationToOff, &WifiRadioEnergyModel::ChangeState, this, WifiPhyState::OFF);
+  //m_switchToOffEvent.Cancel ();
+  //Time durationToOff = GetMaximumTimeInState (m_currentState);
+  //m_switchToOffEvent = Simulator::Schedule (durationToOff, &WifiRadioEnergyModel::ChangeState, this, WifiPhyState::OFF);
 }
 
 double
@@ -434,15 +435,23 @@ WifiRadioEnergyModel::ChangeState (int newState)
   // by the previous instance is erroneously the final state stored in m_currentState. The check below
   // ensures that previous instances do not change m_currentState.
 
-  if (m_nPendingChangeState <= 1 && m_currentState != WifiPhyState::OFF)
-    {
-      // update current state & last update time stamp
-      SetWifiRadioState ((WifiPhyState) newState);
+  //if (m_nPendingChangeState <= 1 && m_currentState != WifiPhyState::OFF)
+  //  {
+  //    // update current state & last update time stamp
+  //    SetWifiRadioState ((WifiPhyState) newState);
 
-      // some debug message
-      NS_LOG_DEBUG ("WifiRadioEnergyModel:Total energy consumption is " <<
+  //    // some debug message
+  //    NS_LOG_DEBUG ("WifiRadioEnergyModel:Total energy consumption is " <<
+  //                  m_totalEnergyConsumption << "J");
+  //  }
+  if (!m_isSupersededChangeState)
+  {
+    SetWifiRadioState((WifiPhyState) newState);
+    NS_LOG_DEBUG("WifiRadioEnergyModel:Total energy consumption is " <<
                     m_totalEnergyConsumption << "J");
-    }
+  }
+
+  m_isSupersededChangeState = (m_nPendingChangeState > 1);
 
   m_nPendingChangeState--;
 }
@@ -559,7 +568,7 @@ WifiRadioEnergyModel::SetWifiRadioState (const WifiPhyState state)
       stateName = "SLEEP";
       break;
     case WifiPhyState::OFF:
-      stateName = "OFF";
+      stateName = "SLEEP";
       break;
     }
   NS_LOG_DEBUG ("WifiRadioEnergyModel:Switching to state: " << stateName <<
